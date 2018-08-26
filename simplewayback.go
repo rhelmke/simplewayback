@@ -57,6 +57,7 @@ var (
 	ErrorInvalidNumber        = errors.New("simplewayback: Integer must be >= 0")
 	ErrorPaginationResumption = errors.New("simplewayback: Pagination and Resumption Keys can not be enabled at the same time")
 	ErrorInvalidScheme        = errors.New("simplewayback: The provided URL must use 'http', 'https' or '' as scheme")
+	ErrorBadResponse          = errors.New("simplewayback: Bad Response from Wayback Machine API (!200)")
 )
 
 // RegexFields
@@ -470,6 +471,9 @@ func (cdx *CDXAPI) RawPerform() (*CDXRawQuery, error) {
 	}
 	client := http.Client{}
 	req, err := http.NewRequest("GET", cdx.urlBuf.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Set("User-Agent", "simplewayback/0.1 (https://github.com/rhelmke/simplewayback)")
 	if cdx.apiKey != "" {
 		req.AddCookie(&http.Cookie{Name: "cdx-auth-token", Value: cdx.apiKey})
@@ -477,6 +481,9 @@ func (cdx *CDXAPI) RawPerform() (*CDXRawQuery, error) {
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, ErrorBadResponse
 	}
 	return &CDXRawQuery{resp: resp}, nil
 }
@@ -510,6 +517,9 @@ func (dr *CDXResultReader) Read(p []byte) (int, error) {
 	if dr.resp == nil {
 		client := http.Client{}
 		req, err := http.NewRequest("GET", fmt.Sprintf("%s/%s/%s", dataURL, dr.Timestamp.Format("20060102150405"), dr.Original), nil)
+		if err != nil {
+
+		}
 		fmt.Printf("%s/%s/%s\n", dataURL, dr.Timestamp.Format("20060102150405"), dr.Original)
 		req.Header.Set("User-Agent", "simplewayback/0.1 (https://github.com/rhelmke/simplewayback)")
 		req.Header.Del("Accept-Encoding")
@@ -518,6 +528,9 @@ func (dr *CDXResultReader) Read(p []byte) (int, error) {
 		if err != nil {
 			dr.EOF = true
 			return 0, err
+		}
+		if dr.resp.StatusCode != http.StatusOK {
+			return 0, ErrorBadResponse
 		}
 	}
 	return dr.resp.Body.Read(p)
@@ -582,3 +595,4 @@ func (cdx *CDXAPI) Perform() ([]CDXResult, error) {
 	}
 	return result, nil
 }
+
