@@ -1,3 +1,4 @@
+// Package simplewayback is a simple library for querying the Wayback Machine CDX API and fetching snapshots
 package simplewayback
 
 import (
