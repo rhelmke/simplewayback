@@ -482,9 +482,6 @@ func (cdx *CDXAPI) RawPerform() (*CDXRawQuery, error) {
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, ErrorBadResponse
-	}
 	return &CDXRawQuery{resp: resp}, nil
 }
 
@@ -520,7 +517,6 @@ func (dr *cdxResultReader) Read(p []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		fmt.Printf("%s/%s/%s\n", dataURL, dr.timestamp.Format("20060102150405"), dr.original)
 		req.Header.Set("User-Agent", "simplewayback/0.1 (https://github.com/rhelmke/simplewayback)")
 		req.Header.Del("Accept-Encoding")
 		req.Header.Set("Accept", "*/*")
@@ -528,9 +524,6 @@ func (dr *cdxResultReader) Read(p []byte) (int, error) {
 		if err != nil {
 			dr.eof = true
 			return 0, err
-		}
-		if dr.resp.StatusCode != http.StatusOK {
-			return 0, ErrorBadResponse
 		}
 	}
 	return dr.resp.Body.Read(p)
