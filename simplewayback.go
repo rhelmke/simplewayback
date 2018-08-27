@@ -109,7 +109,10 @@ type CDXAPI struct {
 // NewCDXAPI creates and initializes a new CDX API wrapper
 func NewCDXAPI(url string) (*CDXAPI, error) {
 	cdx := &CDXAPI{params: &neturl.Values{}, urlBuf: &bytes.Buffer{}}
-	return cdx, cdx.SetURL(url)
+	if err := cdx.SetURL(url); err != nil {
+		return nil, err
+	}
+	return cdx, nil
 }
 
 // SetAPIKey sets an optional API key
@@ -261,7 +264,7 @@ func (cdx *CDXAPI) SetTimeFilter(from time.Time, to time.Time) error {
 		return ErrorInvalidFromTo
 	}
 	cdx.params.Set("from", from.Format("20060102150405"))
-	cdx.params.Set("to", from.Format("20060102150405"))
+	cdx.params.Set("to", to.Format("20060102150405"))
 	return nil
 }
 
@@ -327,10 +330,7 @@ func (cdx *CDXAPI) SetGzip(enabled bool) error {
 
 // Gzip getter
 func (cdx *CDXAPI) Gzip() bool {
-	if cdx.params.Get("gzip") == "false" {
-		return false
-	}
-	return true
+	return !(cdx.params.Get("gzip") == "false")
 }
 
 // ResetGzip resets gzip (default: true)
@@ -427,7 +427,7 @@ func (cdx *CDXAPI) PaginationPage() int {
 
 // ResetPagination resets the pagination (default: enabled=false, page=-1)
 func (cdx *CDXAPI) ResetPagination() {
-	cdx.SetPagination(false, -1)
+	cdx.SetPagination(false, 0)
 }
 
 func (cdx *CDXAPI) buildURL(urlDst *bytes.Buffer) error {
@@ -490,43 +490,43 @@ func (cdx *CDXAPI) RawPerform() (*CDXRawQuery, error) {
 
 // CDXResult represents a single from the CDX API Response
 type CDXResult struct {
-	URLKey     string           `json:"url_key"`
-	Timestamp  time.Time        `json:"timestamp"`
-	Original   string           `json:"original"`
-	MimeType   string           `json:"mime_type"`
-	StatusCode int              `json:"status_code"`
-	Digest     string           `json:"digest"`
-	Length     int              `json:"length"`
-	Data       *CDXResultReader `json:"-"`
+	URLKey     string    `json:"url_key"`
+	Timestamp  time.Time `json:"timestamp"`
+	Original   string    `json:"original"`
+	MimeType   string    `json:"mime_type"`
+	StatusCode int       `json:"status_code"`
+	Digest     string    `json:"digest"`
+	Length     int       `json:"length"`
+	Data       io.Reader `json:"-"`
 }
 
 // CDXResultReader can be used to perform a request to the wayback machine and
 // fetch the snapshot data of a specific CDXResult.
-type CDXResultReader struct {
+type cdxResultReader struct {
 	resp      *http.Response
-	Original  string
-	Timestamp time.Time
-	EOF       bool
+	original  string
+	timestamp time.Time
+	eof       bool
 }
 
 // Read implements the Reader interface for CDXResultReader
-func (dr *CDXResultReader) Read(p []byte) (int, error) {
-	if dr.EOF {
+func (dr *cdxResultReader) Read(p []byte) (int, error) {
+	if dr.eof {
 		return 0, io.EOF
 	}
 	if dr.resp == nil {
 		client := http.Client{}
-		req, err := http.NewRequest("GET", fmt.Sprintf("%s/%s/%s", dataURL, dr.Timestamp.Format("20060102150405"), dr.Original), nil)
+		req, err := http.NewRequest("GET", fmt.Sprintf("%s/%s/%s", dataURL, dr.timestamp.Format("20060102150405"), dr.original), nil)
 		if err != nil {
-
+			return 0, err
 		}
-		fmt.Printf("%s/%s/%s\n", dataURL, dr.Timestamp.Format("20060102150405"), dr.Original)
+		fmt.Printf("%s/%s/%s\n", dataURL, dr.timestamp.Format("20060102150405"), dr.original)
 		req.Header.Set("User-Agent", "simplewayback/0.1 (https://github.com/rhelmke/simplewayback)")
 		req.Header.Del("Accept-Encoding")
 		req.Header.Set("Accept", "*/*")
 		dr.resp, err = client.Do(req)
 		if err != nil {
-			dr.EOF = true
+			dr.eof = true
 			return 0, err
 		}
 		if dr.resp.StatusCode != http.StatusOK {
@@ -587,7 +587,7 @@ func (cdx *CDXAPI) Perform() ([]CDXResult, error) {
 		if err != nil {
 			return []CDXResult{}, err
 		}
-		result = append(result, CDXResult{URLKey: splitBuf[i][0], Timestamp: t, Original: splitBuf[i][2], MimeType: splitBuf[i][3], StatusCode: code, Digest: splitBuf[i][5], Length: ln, Data: &CDXResultReader{Original: splitBuf[i][2], Timestamp: t}})
+		result = append(result, CDXResult{URLKey: splitBuf[i][0], Timestamp: t, Original: splitBuf[i][2], MimeType: splitBuf[i][3], StatusCode: code, Digest: splitBuf[i][5], Length: ln, Data: &cdxResultReader{original: splitBuf[i][2], timestamp: t}})
 	}
 	// act as changing the output never happened :D
 	if !isJSON {
@@ -595,4 +595,3 @@ func (cdx *CDXAPI) Perform() ([]CDXResult, error) {
 	}
 	return result, nil
 }
-
