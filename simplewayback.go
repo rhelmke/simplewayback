@@ -575,7 +575,7 @@ func (cdx *CDXAPI) Perform() ([]CDXResult, error) {
 			splitBuf[i][4] = "0"
 		}
 		if splitBuf[i][7] == "-" {
-			splitBuf[i][7] == "0"
+			splitBuf[i][7] = "0"
 		}
 		// parse time
 		t, err := time.Parse("20060102150405", splitBuf[i][1])
